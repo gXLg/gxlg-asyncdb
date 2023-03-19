@@ -1,0 +1,27 @@
+{
+  "name": "gxlg-asyncdb",
+  "version": "1.0.0",
+  "description": "A lightweight JSON based database for asynchronous projects",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gXLg/gxlg-asyncdb.git"
+  },
+  "keywords": [
+    "json",
+    "database",
+    "async"
+  ],
+  "author": "gxlg",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/gXLg/gxlg-asyncdb/issues"
+  },
+  "homepage": "https://github.com/gXLg/gxlg-asyncdb#readme",
+  "dependencies": {
+    "gxlg-utils": "^1.0.1"
+  }
+}
