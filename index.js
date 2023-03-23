@@ -1,7 +1,7 @@
 const { jsonCopy } = require("gxlg-utils").json;
 const fs = require("fs");
 
-class AsyncDB {
+class AsyncTable {
   constructor(path, types){
     this.path = path;
     if(!fs.existsSync(path)){
@@ -95,7 +95,7 @@ class AsyncDB {
       }
     } else {
       if(this.finish != null){
-        clearInterval(this.ticker);
+        this.kill();
         this.finish();
       }
     }
@@ -159,4 +159,99 @@ class AsyncDB {
   }
 }
 
-module.exports = AsyncDB;
+class AsyncSet {
+  constructor(path){
+    this.path = path;
+    if(!fs.existsSync(path)){
+      this.data = new Set();
+      this.save();
+    } else {
+      const d = JSON.parse(fs.readFileSync(path, "utf8"));
+      this.data = new Set(d);
+    }
+
+    this.locked = false;
+    this.jobs = [];
+    this.ticker = setInterval(() => { this.tick(); }, 1);
+    this.finish = null;
+  }
+
+  async stop(){
+    return new Promise((res, rej) => {
+      this.finish = res;
+    });
+  }
+
+  kill(){
+    clearInterval(this.ticker);
+  }
+
+  save(){
+    fs.writeFileSync(this.path, this.dataString());
+  }
+
+  dataString(){
+    return JSON.stringify([...this.data]);
+  }
+
+  tick(){
+    if(this.locked) return;
+    this.locked = true;
+
+    if(this.jobs.length){
+      const job = this.jobs.splice(0, 1)[0];
+      if(job.task == "add"){
+        this.data.add(job.entry);
+        if(!this.jobs.some(j => ["add", "remove"].includes(j.task)))
+          this.save();
+        job.done(true);
+      } else if(job.task == "remove"){
+        this.data.delete(job.entry);
+        if(!this.jobs.some(j => ["add", "remove"].includes(j.task)))
+          this.save();
+        job.done(true);
+      } else if(job.task == "has"){
+        job.done(this.data.has(job.entry));
+      }
+    } else {
+      if(this.finish != null){
+        this.kill();
+        this.finish();
+      }
+    }
+
+    this.locked = false;
+  }
+
+  async add(name){
+    return new Promise((res, rej) => {
+      this.jobs.push({
+        "task": "add",
+        "entry": name,
+        "done": res
+      });
+    });
+  }
+
+  async remove(name){
+    return new Promise((res, rej) => {
+      this.jobs.push({
+        "task": "remove",
+        "entry": name,
+        "done": res
+      });
+    });
+  }
+
+  async has(name){
+    return new Promise((res, rej) => {
+      this.jobs.push({
+        "task": "has",
+        "entry": name,
+        "done": res
+      });
+    });
+  }
+}
+
+module.exports = { AsyncTable, AsyncSet };
