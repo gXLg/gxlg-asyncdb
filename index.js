@@ -90,6 +90,8 @@ class AsyncDB {
         const param = job.params;
         const d = this.data[entry][this.types.index[param]];
         job.done(d);
+      } else if(job.task == "entries"){
+        job.done(Object.keys(this.data));
       }
     } else {
       if(this.finish != null){
@@ -140,6 +142,17 @@ class AsyncDB {
         "task": "get",
         "entry": name,
         "params": param,
+        "done": res
+      });
+    });
+  }
+
+  async entries(){
+    return new Promise((res, rej) => {
+      this.jobs.push({
+        "task": "entries",
+        "entry": null,
+        "params": null,
         "done": res
       });
     });
