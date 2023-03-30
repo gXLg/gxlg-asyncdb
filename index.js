@@ -73,7 +73,9 @@ class AsyncTable {
       } else if(job.task == "put"){
         const entry = job.entry;
         const params = job.params;
-        const e = this.data[entry];
+        const e = this.data[entry] ?? this.types.list.map(
+          t => this.types.defaults[t]
+        );
         for(const type in params)
           e[this.types.index[type]] = params[type];
         if(!this.jobs.some(j => ["put", "newEntry"].includes(j.task)))
