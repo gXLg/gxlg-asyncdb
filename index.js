@@ -93,7 +93,10 @@ class AsyncTable {
       } else if(job.task == "get"){
         const entry = job.entry;
         const param = job.params;
-        const d = this.data[entry][this.types.index[param]];
+        const d = (
+          this.data[entry]?.[this.types.index[param]] ??
+          this.types.defaults[param]
+        );
         job.done(jsonCopy(d));
       } else if(job.task == "entries"){
         job.done(Object.keys(this.data));
