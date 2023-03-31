@@ -22,6 +22,6 @@
   },
   "homepage": "https://github.com/gXLg/gxlg-asyncdb#readme",
   "dependencies": {
-    "gxlg-utils": "^1.1.0"
+    "gxlg-utils": "^1.1.1"
   }
 }
