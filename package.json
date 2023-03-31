@@ -1,6 +1,6 @@
 {
   "name": "gxlg-asyncdb",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "A lightweight JSON based database for asynchronous projects",
   "main": "index.js",
   "scripts": {
