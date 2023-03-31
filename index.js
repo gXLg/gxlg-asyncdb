@@ -74,10 +74,12 @@ class AsyncTable {
         const entry = job.entry;
         const params = job.params;
         const e = this.data[entry] ?? this.types.list.map(
-          t => jsonCopy(this.types.defaults[t])
+          t => jsonCopy(this.types.defaults[t] ?? null)
         );
         for(const type in params)
           e[this.types.index[type]] = params[type];
+        this.data[entry] = e;
+
         if(!this.jobs.some(j => ["put", "newEntry"].includes(j.task)))
           this.save();
         job.done(true);
@@ -87,7 +89,7 @@ class AsyncTable {
         for(const type of this.types.list)
           obj[type] = jsonCopy(
             this.data[entry]?.[this.types.index[type]] ??
-            this.types.defaults[type]
+            this.types.defaults[type] ?? null
           );
         job.done(obj);
       } else if(job.task == "get"){
@@ -95,7 +97,7 @@ class AsyncTable {
         const param = job.params;
         const d = (
           this.data[entry]?.[this.types.index[param]] ??
-          this.types.defaults[param]
+          this.types.defaults[param] ?? null
         );
         job.done(jsonCopy(d));
       } else if(job.task == "entries"){
