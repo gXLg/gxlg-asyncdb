@@ -67,7 +67,9 @@ class AsyncTable {
           else e.push(this.types.defaults[type] ?? null);
         }
         this.data[entry] = e;
-        if(!this.jobs.some(j => ["put", "newEntry"].includes(j.task)))
+        if(!this.jobs.some(j =>
+          ["put", "newEntry", "perform"].includes(j.task)
+        ))
           this.save();
         job.done(true);
       } else if(job.task == "put"){
@@ -80,7 +82,9 @@ class AsyncTable {
           e[this.types.index[type]] = params[type];
         this.data[entry] = e;
 
-        if(!this.jobs.some(j => ["put", "newEntry"].includes(j.task)))
+        if(!this.jobs.some(j =>
+          ["put", "newEntry", "perform"].includes(j.task)
+        ))
           this.save();
         job.done(true);
       } else if(job.task == "getEntry"){
@@ -102,6 +106,28 @@ class AsyncTable {
         job.done(jsonCopy(d));
       } else if(job.task == "entries"){
         job.done(Object.keys(this.data));
+      } else if(job.task == "perform"){
+
+        const entry = job.entry;
+        const obj = { };
+        for(const type of this.types.list)
+          obj[type] = jsonCopy(
+            this.data[entry]?.[this.types.index[type]] ??
+            this.types.defaults[type] ?? null
+          );
+        const ret = job.params(obj);
+        const list = [...Array(this.types.list.length)];
+        for(const type of this.types.list){
+          list[this.types.index[type]] =
+            obj[type] ?? this.types.defaults[type] ?? null;
+        }
+        this.data[entry] = jsonCopy(list);
+
+        if(!this.jobs.some(j =>
+          ["put", "newEntry", "perform"].includes(j.task)
+        ))
+          this.save();
+        job.done(ret);
       }
     } else {
       if(this.finish != null){
