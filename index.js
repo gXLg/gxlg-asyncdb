@@ -193,6 +193,18 @@ class AsyncTable {
       });
     });
   }
+
+  async perform(name, callback){
+    return new Promise((res, rej) => {
+      this.jobs.push({
+        "task": "perform",
+        "entry": name,
+        "params": callback,
+        "done": res
+      });
+    });
+  }
+
 }
 
 class AsyncSet {
