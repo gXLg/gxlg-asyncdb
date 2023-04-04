@@ -52,7 +52,7 @@ class AsyncTable {
     return JSON.stringify({ "types": this.types, "data": this.data });
   }
 
-  tick(){
+  async tick(){
     if(this.locked) return;
     this.locked = true;
 
@@ -115,7 +115,7 @@ class AsyncTable {
             this.data[entry]?.[this.types.index[type]] ??
             this.types.defaults[type] ?? null
           );
-        const ret = job.params(obj);
+        const ret = await job.params(obj);
         const list = [...Array(this.types.list.length)];
         for(const type of this.types.list){
           list[this.types.index[type]] =
