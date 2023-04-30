@@ -260,6 +260,8 @@ class AsyncSet {
         job.done(true);
       } else if(job.task == "has"){
         job.done(this.data.has(job.entry));
+      } else if(job.task == "size"){
+        job.done(this.data.size);
       }
     } else {
       if(this.finish != null){
@@ -296,6 +298,15 @@ class AsyncSet {
       this.jobs.push({
         "task": "has",
         "entry": name,
+        "done": res
+      });
+    });
+  }
+
+  async size(){
+    return new Promise((res, rej) => {
+      this.jobs.push({
+        "task": "size",
         "done": res
       });
     });
