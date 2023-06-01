@@ -110,7 +110,7 @@ class AsyncSet {
 
   async add(name){
     const lock = this.lock;
-    const new_lock = new Promise(res => {
+    const new_lock = new Promise(async res => {
       await lock;
       this.data.add(name);
       res();
@@ -121,7 +121,7 @@ class AsyncSet {
 
   async remove(name){
     const lock = this.lock;
-    const new_lock = new Promise(res => {
+    const new_lock = new Promise(async res => {
       await lock;
       this.data.delete(name);
       res();
@@ -132,7 +132,7 @@ class AsyncSet {
 
   async has(name){
     const lock = this.lock;
-    const new_lock = new Promise(res => {
+    const new_lock = new Promise(async res => {
       await lock;
       const h = this.data.has(name);
       res(h);
@@ -143,7 +143,7 @@ class AsyncSet {
 
   async size(){
     const lock = this.lock;
-    const new_lock = new Promise(res => {
+    const new_lock = new Promise(async res => {
       await lock;
       const s = this.data.size;
       res(s);
