@@ -4,237 +4,103 @@ const fs = require("fs");
 class AsyncTable {
   constructor(path, types){
     this.path = path;
-    if(!fs.existsSync(path)){
-      const t = { "index": { }, "defaults": { }, "list": [] };
-      if(types == undefined)
-        throw new Error("Types must be specified for a new DB!");
-      let i = 0;
-      for(const type of types){
-        if(typeof type == "string"){
-          t.index[type] = i ++;
-          t.list.push(type);
-        } else {
-          t.index[type[0]] = i ++;
-          t.defaults[type[0]] = jsonCopy(type[1]);
-          t.list.push(type[0]);
-        }
+
+    const t = { "index": { }, "defaults": { }, "list": [] };
+
+    let i = 0;
+    for(const type of types){
+      if(typeof type == "string"){
+        t.index[type] = i ++;
+        t.list.push(type);
+      } else {
+        t.index[type[0]] = i ++;
+        t.defaults[type[0]] = jsonCopy(type[1]);
+        t.list.push(type[0]);
       }
-      this.types = t;
-      this.data = { };
-      this.save();
-    } else {
-      const d = JSON.parse(fs.readFileSync(path, "utf8"));
-      this.types = d.types;
-      this.data = d.data;
     }
 
-    this.locked = false;
-    this.jobs = [];
-    this.ticker = setInterval(() => { this.tick(); }, 1);
-    this.finish = null;
-  }
+    this.types = t;
 
-  async stop(){
-    return new Promise((res, rej) => {
-      this.finish = res;
+    if(fs.existsSync(path))
+      this.data = JSON.parse(fs.readFileSync(path, "utf8"));
+    else
+      this.data = { };
+
+    fs.writeFileSync(path, this.dataString());
+
+    this.locks = { };
+    this.save_lock = null;
+
+    return new Proxy(this, {
+      "get": (target, key) => {
+        return async callback =>
+          await target.perform(key, callback);
+      }
     });
   }
 
-  kill(){
-    clearInterval(this.ticker);
-  }
-
-  save(){
-    fs.writeFileSync(this.path, this.dataString());
+  async save(){
+    const save_lock = this.save_lock;
+    const new_lock = new Promise(async res => {
+      await save_lock;
+      fs.writeFileSync(this.path, this.dataString());
+      res();
+    });
+    this.save_lock = new_lock;
+    return new_lock;
   }
 
   dataString(){
-    return JSON.stringify({ "types": this.types, "data": this.data });
+    return JSON.stringify(this.data);
   }
 
-  async tick(){
-    if(this.locked) return;
-    this.locked = true;
+  async perform(key, callback){
 
-    if(this.jobs.length){
-      const job = this.jobs.splice(0, 1)[0];
-      if(job.task == "newEntry"){
-        const entry = job.entry;
-        const params = job.params;
-        const e = [];
-        for(const type of this.types.list){
-          if(type in params) e.push(params[type]);
-          else e.push(this.types.defaults[type] ?? null);
-        }
-        this.data[entry] = e;
-        if(!this.jobs.some(j =>
-          ["put", "newEntry", "perform"].includes(j.task)
-        ))
-          this.save();
-        job.done(true);
-      } else if(job.task == "put"){
-        const entry = job.entry;
-        const params = job.params;
-        const e = this.data[entry] ?? this.types.list.map(
-          t => jsonCopy(this.types.defaults[t] ?? null)
+    const lock = this.locks[key] ?? null;
+    const new_lock = new Promise(async res => {
+      await lock;
+
+      const obj = { };
+      for(const type of this.types.list)
+        obj[type] = jsonCopy(
+          this.data[key]?.[this.types.index[type]] ??
+          this.types.defaults[type] ?? null
         );
-        for(const type in params)
-          e[this.types.index[type]] = params[type];
-        this.data[entry] = e;
+      const ret = await callback(obj);
 
-        if(!this.jobs.some(j =>
-          ["put", "newEntry", "perform"].includes(j.task)
-        ))
-          this.save();
-        job.done(true);
-      } else if(job.task == "getEntry"){
-        const entry = job.entry;
-        const obj = { };
-        for(const type of this.types.list)
-          obj[type] = jsonCopy(
-            this.data[entry]?.[this.types.index[type]] ??
-            this.types.defaults[type] ?? null
-          );
-        job.done(obj);
-      } else if(job.task == "get"){
-        const entry = job.entry;
-        const param = job.params;
-        const d = (
-          this.data[entry]?.[this.types.index[param]] ??
-          this.types.defaults[param] ?? null
-        );
-        job.done(jsonCopy(d));
-      } else if(job.task == "entries"){
-        job.done(Object.keys(this.data));
-      } else if(job.task == "perform"){
-
-        const entry = job.entry;
-        const obj = { };
-        for(const type of this.types.list)
-          obj[type] = jsonCopy(
-            this.data[entry]?.[this.types.index[type]] ??
-            this.types.defaults[type] ?? null
-          );
-        const ret = await job.params(obj);
-        const list = [...Array(this.types.list.length)];
-        for(const type of this.types.list){
-          list[this.types.index[type]] =
-            obj[type] ?? this.types.defaults[type] ?? null;
-        }
-        this.data[entry] = jsonCopy(list);
-
-        if(!this.jobs.some(j =>
-          ["put", "newEntry", "perform"].includes(j.task)
-        ))
-          this.save();
-        job.done(ret);
+      const list = [...Array(this.types.list.length)];
+      for(const type of this.types.list){
+        list[this.types.index[type]] =
+          obj[type] ?? this.types.defaults[type] ?? null;
       }
-    } else {
-      if(this.finish != null){
-        this.kill();
-        this.finish();
-      }
-    }
+      this.data[key] = jsonCopy(list);
+      await this.save();
 
-    this.locked = false;
-  }
+      res(ret);
 
-  async newEntry(name, params){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "newEntry",
-        "entry": name,
-        "params": params,
-        "done": res
-      });
     });
-  }
 
-  async put(name, params){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "put",
-        "entry": name,
-        "params": params,
-        "done": res
-      });
-    });
+    this.locks[key] = new_lock;
+    return new_lock;
   }
-
-  async getEntry(name){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "getEntry",
-        "entry": name,
-        "params": null,
-        "done": res
-      });
-    });
-  }
-
-  async get(name, param){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "get",
-        "entry": name,
-        "params": param,
-        "done": res
-      });
-    });
-  }
-
-  async entries(){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "entries",
-        "entry": null,
-        "params": null,
-        "done": res
-      });
-    });
-  }
-
-  async perform(name, callback){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "perform",
-        "entry": name,
-        "params": callback,
-        "done": res
-      });
-    });
-  }
-
 }
+
 
 class AsyncSet {
   constructor(path){
     this.path = path;
     if(!fs.existsSync(path)){
       this.data = new Set();
-      this.save();
+      fs.writeFileSync(path, this.dataString());
     } else {
       const d = JSON.parse(fs.readFileSync(path, "utf8"));
       this.data = new Set(d);
     }
 
-    this.locked = false;
-    this.jobs = [];
-    this.ticker = setInterval(() => { this.tick(); }, 1);
-    this.finish = null;
+    this.lock = null;
   }
 
-  async stop(){
-    return new Promise((res, rej) => {
-      this.finish = res;
-    });
-  }
-
-  kill(){
-    clearInterval(this.ticker);
-  }
-
-  save(){
+  async save(){
     fs.writeFileSync(this.path, this.dataString());
   }
 
@@ -242,75 +108,50 @@ class AsyncSet {
     return JSON.stringify([...this.data]);
   }
 
-  tick(){
-    if(this.locked) return;
-    this.locked = true;
-
-    if(this.jobs.length){
-      const job = this.jobs.splice(0, 1)[0];
-      if(job.task == "add"){
-        this.data.add(job.entry);
-        if(!this.jobs.some(j => ["add", "remove"].includes(j.task)))
-          this.save();
-        job.done(true);
-      } else if(job.task == "remove"){
-        this.data.delete(job.entry);
-        if(!this.jobs.some(j => ["add", "remove"].includes(j.task)))
-          this.save();
-        job.done(true);
-      } else if(job.task == "has"){
-        job.done(this.data.has(job.entry));
-      } else if(job.task == "size"){
-        job.done(this.data.size);
-      }
-    } else {
-      if(this.finish != null){
-        this.kill();
-        this.finish();
-      }
-    }
-
-    this.locked = false;
-  }
-
   async add(name){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "add",
-        "entry": name,
-        "done": res
-      });
+    const lock = this.lock;
+    const new_lock = new Promise(res => {
+      await lock;
+      this.data.add(name);
+      res();
     });
+    this.lock = new_lock;
+    return new_lock;
   }
 
   async remove(name){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "remove",
-        "entry": name,
-        "done": res
-      });
+    const lock = this.lock;
+    const new_lock = new Promise(res => {
+      await lock;
+      this.data.delete(name);
+      res();
     });
+    this.lock = new_lock;
+    return new_lock;
   }
 
   async has(name){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "has",
-        "entry": name,
-        "done": res
-      });
+    const lock = this.lock;
+    const new_lock = new Promise(res => {
+      await lock;
+      const h = this.data.has(name);
+      res(h);
     });
+    this.lock = new_lock;
+    return new_lock;
   }
 
   async size(){
-    return new Promise((res, rej) => {
-      this.jobs.push({
-        "task": "size",
-        "done": res
-      });
+    const lock = this.lock;
+    const new_lock = new Promise(res => {
+      await lock;
+      const s = this.data.size;
+      res(s);
     });
+    this.lock = new_lock;
+    return new_lock;
   }
+
 }
 
 module.exports = { AsyncTable, AsyncSet };
