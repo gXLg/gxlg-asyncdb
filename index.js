@@ -1,4 +1,4 @@
-const { jsonCopy } = require("gxlg-utils").json;
+const { jsonCopy, jsonCompare } = require("gxlg-utils").json;
 const fs = require("fs");
 
 class AsyncTable {
@@ -21,10 +21,14 @@ class AsyncTable {
 
     this.types = t;
 
-    if(fs.existsSync(path))
-      this.data = JSON.parse(fs.readFileSync(path, "utf8"));
-    else
+    if(fs.existsSync(path)){
+      const d = JSON.parse(fs.readFileSync(path, "utf8"));
+      if(!jsonCompare(t, d.types))
+        throw new Error("The Defined Types and the Database Loaded Types do not match!");
+      this.data = d.data ?? { };
+    } else {
       this.data = { };
+    }
 
     fs.writeFileSync(path, this.dataString());
 
@@ -51,32 +55,36 @@ class AsyncTable {
   }
 
   dataString(){
-    return JSON.stringify(this.data);
+    return JSON.stringify({ "types": this.types, "data": this.data });
   }
 
   async perform(key, callback){
 
     const lock = this.locks[key] ?? null;
-    const new_lock = new Promise(async res => {
+    const new_lock = new Promise(async (res, rej) => {
       await lock;
 
-      const obj = { };
-      for(const type of this.types.list)
-        obj[type] = jsonCopy(
-          this.data[key]?.[this.types.index[type]] ??
-          this.types.defaults[type] ?? null
-        );
-      const ret = await callback(obj);
+      try {
+        const obj = { };
+        for(const type of this.types.list)
+          obj[type] = jsonCopy(
+            this.data[key]?.[this.types.index[type]] ??
+            this.types.defaults[type] ?? null
+          );
+        const ret = await callback(obj);
 
-      const list = [...Array(this.types.list.length)];
-      for(const type of this.types.list){
-        list[this.types.index[type]] =
-          obj[type] ?? this.types.defaults[type] ?? null;
+        const list = [...Array(this.types.list.length)];
+        for(const type of this.types.list){
+          list[this.types.index[type]] =
+            obj[type] ?? this.types.defaults[type] ?? null;
+        }
+        this.data[key] = jsonCopy(list);
+        await this.save();
+
+        res(ret);
+      } catch(error){
+        rej(error);
       }
-      this.data[key] = jsonCopy(list);
-      await this.save();
-
-      res(ret);
 
     });
 
