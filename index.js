@@ -91,6 +91,11 @@ class AsyncTable {
     this.locks[key] = new_lock;
     return new_lock;
   }
+
+  async entries(){
+    return Object.keys(this.data);
+  }
+
 }
 
 
