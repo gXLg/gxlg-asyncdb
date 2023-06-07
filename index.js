@@ -37,6 +37,7 @@ class AsyncTable {
 
     return new Proxy(this, {
       "get": (target, key) => {
+        if(target[key] != null) return target[key];
         return async callback =>
           await target.perform(key, callback);
       }
