@@ -127,6 +127,7 @@ class AsyncSet {
     const new_lock = new Promise(async res => {
       await lock;
       this.data.add(name);
+      await this.save();
       res();
     });
     this.lock = new_lock;
@@ -138,6 +139,7 @@ class AsyncSet {
     const new_lock = new Promise(async res => {
       await lock;
       this.data.delete(name);
+      await this.save();
       res();
     });
     this.lock = new_lock;
